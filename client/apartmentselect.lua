@@ -1,7 +1,8 @@
 local BoardCoords = vec4(-44.19, -585.99, 87.71, 250.0)
 local BoardModel = `tr_prop_tr_planning_board_01a`
 local RenderTarget = 'modgarage_01'
-local Board, scaleform, buttonsScaleform, currentButtonID = nil, 0, 0, 1
+local Board, scaleform, buttonsScaleform
+local currentButtonID = 1
 local previewCam
 
 local function SetupBoard()
@@ -11,88 +12,58 @@ local function SetupBoard()
     SetModelAsNoLongerNeeded(BoardModel)
 end
 
-local function SetupInstructionalButton(index, control, text)
-    BeginScaleformMovieMethod(buttonsScaleform, 'SET_DATA_SLOT')
-
-    ScaleformMovieMethodAddParamInt(index)
-
-    ScaleformMovieMethodAddParamPlayerNameString(GetControlInstructionalButton(2, control, true))
-
-    BeginTextCommandScaleformString('STRING')
-    AddTextComponentSubstringKeyboardDisplay(text)
-    EndTextCommandScaleformString()
-
-    EndScaleformMovieMethod()
-end
-
 local function SetupInstructionalScaleform()
-    DrawScaleformMovieFullscreen(buttonsScaleform, 255, 255, 255, 0, 0)
+    -- reset the scaleform
+    buttonsScaleform:Method('CLEAR_ALL')
+    buttonsScaleform:MethodArgs('SET_CLEAR_SPACE', { 200 })
 
-    BeginScaleformMovieMethod(buttonsScaleform, 'CLEAR_ALL')
-    EndScaleformMovieMethod()
+    -- Define the buttons
+    local sumbit = GetControlInstructionalButton(2, 191, true)
+    local up = GetControlInstructionalButton(2, 188, true)
+    local down = GetControlInstructionalButton(2, 187, true)
 
-    BeginScaleformMovieMethod(buttonsScaleform, 'SET_CLEAR_SPACE')
-    ScaleformMovieMethodAddParamInt(200)
-    EndScaleformMovieMethod()
+    -- Add the buttons
+    buttonsScaleform:MethodArgs('SET_DATA_SLOT', { 0, sumbit, locale('instructButtons.submit') })
+    buttonsScaleform:MethodArgs('SET_DATA_SLOT', { 1, up, locale('instructButtons.down') })
+    buttonsScaleform:MethodArgs('SET_DATA_SLOT', { 2, down, locale('instructButtons.up') })
 
-    SetupInstructionalButton(0, 191, locale('instructButtons.submit'))
-    SetupInstructionalButton(1, 187, locale('instructButtons.down'))
-    SetupInstructionalButton(2, 188, locale('instructButtons.up'))
-
-    BeginScaleformMovieMethod(buttonsScaleform, 'DRAW_INSTRUCTIONAL_BUTTONS')
-    EndScaleformMovieMethod()
-end
-
-local function CreateNamedRenderTargetForModel(name, model)
-	local handle = 0
-	if not IsNamedRendertargetRegistered(name) then
-		RegisterNamedRendertarget(name, false)
-	end
-
-	if not IsNamedRendertargetLinked(model) then
-		LinkNamedRendertarget(model)
-	end
-
-	if IsNamedRendertargetRegistered(name) then
-		handle = GetNamedRendertargetRenderId(name)
-	end
-
-	return handle
+    -- Draw the buttons
+    buttonsScaleform:Method('DRAW_INSTRUCTIONAL_BUTTONS')
 end
 
 local function StartScaleform()
-    scaleform = lib.requestScaleformMovie('AUTO_SHOP_BOARD', 10000) or 0
-    buttonsScaleform = lib.requestScaleformMovie('INSTRUCTIONAL_BUTTONS', 10000) or 0
+    scaleform = qbx.newScaleform("AUTO_SHOP_BOARD")
+    scaleform:RenderTarget(RenderTarget, BoardModel)
+
+    scaleform:SetFullScreen(false)
+    scaleform:SetProperties(0.25, 0.5, 0.5, 1.0)
+
+    buttonsScaleform = qbx.newScaleform("INSTRUCTIONAL_BUTTONS")
+
     CreateThread(function()
         SetupInstructionalScaleform()
+        scaleform:Draw(true)
+        buttonsScaleform:Draw(true)
+
         while DoesCamExist(previewCam) do
-            local Handle = CreateNamedRenderTargetForModel(RenderTarget, BoardModel)
-            SetTextRenderId(Handle)
-            SetScriptGfxDrawBehindPausemenu(true)
-            SetScaleformFitRendertarget(scaleform, true)
-            DrawScaleformMovie(scaleform, 0.25, 0.5, 0.5, 1.0, 255, 255, 255, 255, 0)
-            SetTextRenderId(1)
             HideHudComponentThisFrame(6)
             HideHudComponentThisFrame(7)
             HideHudComponentThisFrame(9)
-            DrawScaleformMovieFullscreen(buttonsScaleform, 255, 255, 255, 255, 0)
-            SetScriptGfxDrawBehindPausemenu(false)
             Wait(0)
         end
 
-        SetScaleformMovieAsNoLongerNeeded(scaleform)
-        SetScaleformMovieAsNoLongerNeeded(buttonsScaleform)
+        scaleform:Dispose()
+        scaleform = nil
+
+        buttonsScaleform:Dispose()
+        buttonsScaleform = nil
     end)
 end
 
 local function SetupScaleform()
     -- Somehow doesn't update the screen unless you make it blank first. Even though the actionscript suggest it cleans the screen itself internally. :shrug:
-    CallScaleformMovieMethod(scaleform, 'SHOW_BLANK_SCREEN')
-    BeginScaleformMovieMethod(scaleform, 'SET_STYLE')
-    ScaleformMovieMethodAddParamInt(3)
-    EndScaleformMovieMethod()
-
-    BeginScaleformMovieMethod(scaleform, 'SHOW_SELECTION_SCREEN')
+    scaleform:Method('SHOW_BLANK_SCREEN')
+    scaleform:MethodArgs('SET_STYLE', {3})
 
     -- Smart math that isn't modular at all. Can't wait for the support questions for this one
     local StartingPoint
@@ -102,37 +73,30 @@ local function SetupScaleform()
         StartingPoint = 4
     end
 
+    local selectionArgs = {}
     for i = StartingPoint, StartingPoint + 2 do
-        ScaleformMovieMethodAddParamTextureNameString(string.format('selection%s', i))
-        BeginTextCommandScaleformString('STRING')
-        AddTextComponentSubstringPlayerName(ApartmentOptions[i].label)
-        EndTextCommandScaleformString()
-        BeginTextCommandScaleformString('STRING')
-        AddTextComponentSubstringPlayerName(ApartmentOptions[i].description)
-        EndTextCommandScaleformString()
-        ScaleformMovieMethodAddParamInt(0)
+        selectionArgs[#selectionArgs+1] = string.format('selection%s', i)
+        selectionArgs[#selectionArgs+1] = ApartmentOptions[i].label
+        selectionArgs[#selectionArgs+1] = ApartmentOptions[i].description
+        selectionArgs[#selectionArgs+1] = 0
     end
 
-    BeginTextCommandScaleformString('STRING')
-    AddTextComponentSubstringPlayerName(string.format('%s/%s', currentButtonID, #ApartmentOptions))
-    EndTextCommandScaleformString()
-
-    ScaleformMovieMethodAddParamInt(0)
-
-    ScaleformMovieMethodAddParamBool(true)
-    ScaleformMovieMethodAddParamBool(true)
-    ScaleformMovieMethodAddParamBool(true)
+    selectionArgs[#selectionArgs+1] = string.format('%s/%s', currentButtonID, #ApartmentOptions)
+    selectionArgs[#selectionArgs+1] = 0
+    selectionArgs[#selectionArgs+1] = true
+    selectionArgs[#selectionArgs+1] = true
+    selectionArgs[#selectionArgs+1] = true
 
     -- Same "modular" bullshit here. Had no success with CURRENT_SELECTION nor CURRENT_ROLLOVER, not sure why.
     for i = StartingPoint, StartingPoint + 2 do
         if i == currentButtonID then
-            ScaleformMovieMethodAddParamBool(true)
+            selectionArgs[#selectionArgs+1] = true
         else
-            ScaleformMovieMethodAddParamBool(false)
+            selectionArgs[#selectionArgs+1] = false
         end
     end
 
-    EndScaleformMovieMethod()
+    scaleform:MethodArgs('SHOW_SELECTION_SCREEN', selectionArgs)
 end
 
 function SetupCamera(apartmentCam)
