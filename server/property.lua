@@ -24,7 +24,7 @@ function EnterProperty(playerSource, id, isSpawn)
             type = 'stash',
             coords = vec3(stashCoords.x, stashCoords.y, stashCoords.z)
         }
-        exports.ox_inventory:RegisterStash(string.format('qbx_properties_%s', property.property_name), string.format('Property: %s', property.property_name), stashes[i].slots, stashes[i].maxWeight, property.owner)
+        exports.ox_inventory:RegisterStash(string.format('qbx_properties_%s_%s', id, i), string.format('Property: %s', property.property_name), stashes[i].slots, stashes[i].maxWeight, property.owner)
     end
 
     if isInteriorShell then
@@ -315,10 +315,10 @@ RegisterNetEvent('qbx_properties:server:openStash', function()
     local playerSource = source --[[@as number]]
     local propertyId = enteredProperty[playerSource]
     local player = exports.qbx_core:GetPlayer(playerSource)
+    -- Set to 1 as there is currently no implementation for multiple stashes
+    local stashId = 1
     if not hasAccess(player.PlayerData.citizenid, propertyId) then return end
-
-    local property = MySQL.single.await('SELECT property_name FROM properties WHERE id = ?', {propertyId})
-    exports.ox_inventory:forceOpenInventory(playerSource, 'stash', { id = string.format('qbx_properties_%s', property.property_name) })
+    exports.ox_inventory:forceOpenInventory(playerSource, 'stash', { id = string.format('qbx_properties_%s_%s', propertyId, stashId) })
 end)
 
 AddEventHandler('playerDropped', function ()
